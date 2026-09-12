@@ -1,0 +1,53 @@
+'use strict';
+let data=skuData.map(d=>({...d,...productMetadata[d.id]}));
+const $=id=>document.getElementById(id);const fmt=n=>Number(n.toFixed(2)).toString();const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function options(el,entries,selected){el.replaceChildren(...entries.map(([v,l])=>new Option(l,v)));if(entries.some(e=>e[0]===selected))el.value=selected;}
+function populate(){const b=$('brand').value;options($('brand'),[['','全部品牌'],...[...new Set([...data.map(d=>d.brand),...Object.values(productMetadata).map(d=>d.brand)])].map(b=>[b,b])],b);populateProducts();}
+function populateProducts(){const b=$('brand').value,p=$('product').value,items=[...data,...Object.entries(productMetadata).map(([id,d])=>({id,...d}))].filter(d=>!b||d.brand===b);const products=[...new Map(items.map(d=>[d.id,d])).values()];options($('product'),[['','全部商品'],...products.map(d=>[d.id,`排名${d.rank} · ${d.title||productMetadata[d.id]?.title||d.brand}`])],p);render();}
+function current(){return data.filter(d=>(!$('brand').value||d.brand===$('brand').value)&&(!$('product').value||d.id===$('product').value));}
+function safeImage(value){const s=String(value||'');return /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(s)||/^https:\/\//.test(s)?s:'';}
+
+function renderProductCards(rows){
+ const groups=[...new Set(rows.map(d=>d.id))].map(id=>rows.filter(d=>d.id===id)).sort((a,b)=>a[0].rank-b[0].rank);
+ $('skuRows').innerHTML=groups.map(items=>{
+  const d=items[0],title=items.find(x=>x.title)?.title||productMetadata[d.id]?.title||'商品名称待补充',src=safeImage(items.find(x=>x.image)?.image||productMetadata[d.id]?.image),lo=Math.min(...items.map(x=>x.price)),hi=Math.max(...items.map(x=>x.price));
+  return `<details class="productCard"><summary><div class="productPhoto">${src?`<button type="button" class="imageZoom" aria-label="放大商品图片：${escape(title)}" title="点击放大图片"><img src="${escape(src)}" alt="${escape(title)}" loading="lazy"><span aria-hidden="true">放大</span></button>`:'<span>主图待补充</span>'}</div><div class="productCopy"><div class="productTags">排名 ${d.rank} · ${escape(d.brand)}</div><h3>${escape(title)}</h3><div class="productId">商品ID ${escape(d.id)} · ${items.length}个SKU</div></div><div class="productPrice"><small>售卖价格区间</small><strong>¥${fmt(lo)}–${fmt(hi)}</strong><span class="showDetails">展开SKU ⌄</span><span class="hideDetails">收起SKU ⌃</span></div></summary><div class="productSkus"><div class="chartKey"><span>SKU规格 · 按价格升序</span><span>售卖价 / 元</span></div>${productMetadata[d.id]?.note?`<p class="note">${escape(productMetadata[d.id].note)}</p>`:''}${items.map(x=>`<div class="skuRow"><div class="skuName">${escape(x.sku)}</div><div class="price">${fmt(x.price)}</div></div>`).join('')}${(productMetadata[d.id]?.unpricedSkus||[]).filter(sku=>!items.some(x=>x.sku===sku)).map(sku=>`<div class="skuRow"><div class="skuName">${escape(sku)}</div><div class="note">价格待补充</div></div>`).join('')}</div></details>`;
+ }).join('');
+ appendPendingCards(rows);
+ $('skuRows').querySelectorAll('img').forEach(img=>img.addEventListener('error',()=>{const text=document.createElement('span');text.textContent='图片暂不可用';img.replaceWith(text);},{once:true}));
+}
+function appendPendingCards(rows){
+ const missing=Object.entries(productMetadata).filter(([id,d])=>d.pending&&!data.some(x=>x.id===id)&&(!$('brand').value||d.brand===$('brand').value)&&(!$('product').value||id===$('product').value));
+ for(const [id,d] of missing){const el=document.createElement('article');el.className='productCard pendingCard';el.innerHTML=`<div class="pendingInner"><div class="productPhoto"><button type="button" class="imageZoom" aria-label="放大商品图片：${escape(d.title)}"><img src="${escape(safeImage(d.image))}" alt="${escape(d.title)}"><span aria-hidden="true">放大</span></button></div><div class="productCopy"><div class="productTags">排名 ${d.rank} · ${escape(d.brand)}</div><h3>${escape(d.title)}</h3><div class="productId">商品ID ${id}</div></div><div class="productPrice"><strong>待补充</strong><small>${escape(d.pending)}</small></div></div>`;el.dataset.rank=d.rank;$('skuRows').append(el);}
+ for(const card of $('skuRows').children){if(!card.dataset.rank)card.dataset.rank=card.querySelector('.productTags').textContent.match(/排名 (\d+)/)[1];}
+ [...$('skuRows').children].sort((a,b)=>Number(a.dataset.rank)-Number(b.dataset.rank)).forEach(el=>$('skuRows').append(el));
+}
+function renderEmpty(){
+ $('count').textContent='0 品牌 / 0 商品';$('skuCount').textContent='0 个';$('unique').textContent='暂无可统计售价';$('range').textContent='待补充';$('spread').textContent='—';$('coverage').textContent='当前商品价格待补充';$('productInfo').textContent='待补充商品不计入价格统计';renderProductCards([]);$('bands').textContent='暂无SKU价格';$('summaryTitle').textContent='价格待补充';$('summaryText').textContent='补充有效SKU截图后，再展示该商品的价格区间。';$('points').replaceChildren();$('source').textContent='来源：更新版表格 · 待补充价格';
+}
+function render(){if(!current().length){renderEmpty();return;}const rows=current().sort((a,b)=>a.price-b.price);const prices=rows.map(d=>d.price),min=Math.min(...prices),max=Math.max(...prices),brands=new Set(rows.map(d=>d.brand).filter(b=>b!=='品牌待确认')),products=new Set(rows.map(d=>d.id)),points=[...new Set(prices)].sort((a,b)=>a-b);$('count').innerHTML=`${brands.size} <small>品牌</small> / ${products.size} <small>商品</small>`;$('skuCount').innerHTML=`${rows.length} <small>个</small>`;$('unique').textContent=`覆盖 ${points.length} 个实际售价`;$('range').textContent=`¥${fmt(min)}–${fmt(max)}`;$('spread').innerHTML=`${fmt(max-min)} <small>元</small>`;$('coverage').textContent=`已补充 ${new Set(data.map(d=>d.id)).size} 款有价格 · ${Object.entries(productMetadata).filter(([id,d])=>d.pending&&!data.some(x=>x.id===id)).length} 款待补充`;$('productInfo').textContent=products.size===1?`${rows[0].brand} · 商品ID ${rows[0].id} · 原表排名 ${rows[0].rank}`:`${brands.size} 个品牌 / ${products.size} 款商品`;renderProductCards(rows);const bins=[[0,20,'20元以下'],[20,30,'20–30元'],[30,40,'30–40元'],[40,50,'40–50元'],[50,60,'50–60元'],[60,100,'60–100元'],[100,200,'100–200元'],[200,Infinity,'200元及以上']];const counts=bins.map(([a,b])=>prices.filter(p=>p>=a&&p<b).length);$('bands').innerHTML=bins.map(([a,b,l],i)=>`<div class="band" title="${a}≤售价${b===Infinity?'':'<'+b}"><span>${l}</span><div class="track"><div class="fill" style="width:${counts[i]/Math.max(...counts,1)*100}%"></div></div><b>${counts[i]} 个</b></div>`).join('');$('summaryTitle').textContent=`${points.length}个售价，跨度${fmt(max-min)}元`;$('summaryText').textContent=`${brands.size===1?[...brands][0]+'已收录商品':'当前商品'}的SKU售价从${fmt(min)}元至${fmt(max)}元。以下为样本中实际出现的价位。`;$('points').innerHTML=points.map(p=>`<span>¥${fmt(p)}</span>`).join('');const dates=[...new Set(rows.map(d=>d.date))].sort();$('source').textContent=`来源：SKU截图及红字价格标注 · ${dates[0]}${dates.length>1?' 至 '+dates.at(-1):''} · 页面标价（含限时优惠）`;}
+$('brand').onchange=populateProducts;$('product').onchange=render;$('edit').onclick=()=>$('editor').showModal();$('present').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{$('present').textContent='请使用浏览器全屏';}};document.addEventListener('fullscreenchange',()=>{$('present').textContent=document.fullscreenElement?'退出全屏':'全屏展示';});
+function validate(rows){if(!Array.isArray(rows)||!rows.length)throw Error('请提供至少一条SKU数据。');return rows.map((d,i)=>{if(!d||!String(d.brand||'').trim()||!/^\d+$/.test(String(d.id))||!Number.isInteger(Number(d.rank))||Number(d.rank)<1||!String(d.sku||'').trim()||d.price===''||!Number.isFinite(Number(d.price))||Number(d.price)<0||!/^\d{4}-\d{2}-\d{2}$/.test(String(d.date))||Number.isNaN(Date.parse(d.date)))throw Error(`第${i+1}行格式有误，请检查6列、非负价格和日期（YYYY-MM-DD）。`);return {brand:String(d.brand).trim(),id:String(d.id),rank:Number(d.rank),sku:String(d.sku).trim(),price:Number(d.price),date:d.date,title:String(d.title||productMetadata[String(d.id)]?.title||'').trim(),image:safeImage(d.image||productMetadata[String(d.id)]?.image||'')};});}
+function merge(rows){const map=new Map(data.map(d=>[d.id+'|'+d.sku,d]));rows.forEach(d=>map.set(d.id+'|'+d.sku,{...map.get(d.id+'|'+d.sku),...d}));data=[...map.values()];populate();}
+$('apply').onclick=()=>{try{const text=$('paste').value.trim();const lines=text.split(/\r?\n/).filter(l=>l.trim());if(lines[0]?.startsWith('品牌\t'))lines.shift();const rows=validate(lines.map(l=>{const c=l.split('\t').map(s=>s.trim());if(c.length<6||c.length>8)throw Error('每行需要6至8列，最后两列为可选的商品名称和图片地址。');const [brand,id,rank,sku,price,date,title,image]=c;return {brand,id,rank,sku,price,date,title,image};}));merge(rows);$('error').textContent='';$('paste').value='';$('editor').close();}catch(e){$('error').textContent=e.message;}};
+$('export').onclick=()=>{const a=document.createElement('a'),url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.href=url;a.download='烘鞋器-SKU价格数据.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+$('import').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;merge(validate(JSON.parse(await file.text())));$('error').textContent='';$('editor').close();}catch(err){$('error').textContent=err.message;}finally{e.target.value='';}};
+populate();
+if(document.modelContext?.registerTool){try{Promise.resolve(document.modelContext.registerTool({name:'read_sku_prices',title:'查看当前SKU价格',description:'读取看板当前筛选的SKU规格、价格、品牌与商品信息。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:true},execute:input=>{if(!input||typeof input!=='object'||Object.keys(input).length)throw Error('请传入空对象');return {rows:current()};}})).catch(()=>{});}catch{}}
+
+const imageViewer=$('imageViewer');
+$('skuRows').addEventListener('click',event=>{
+ const trigger=event.target.closest('.imageZoom');if(!trigger)return;
+ event.preventDefault();event.stopPropagation();
+ const img=trigger.querySelector('img');if(!img)return;
+ $('zoomImage').src=img.currentSrc||img.src;$('zoomImage').alt=img.alt;
+ $('zoomCaption').textContent=img.alt;
+ imageViewer.showModal();document.body.classList.add('imageViewing');
+});
+$('closeImage').onclick=()=>imageViewer.close();
+imageViewer.addEventListener('click',event=>{
+ if(event.target!==imageViewer)return;
+ const box=imageViewer.getBoundingClientRect();
+ if(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom)imageViewer.close();
+});
+imageViewer.addEventListener('close',()=>{document.body.classList.remove('imageViewing');$('zoomImage').removeAttribute('src');});
