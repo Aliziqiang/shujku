@@ -1,5 +1,4 @@
 """Load the portable dashboard from structured data and bundled product photos."""
-import base64
 import json
 from pathlib import Path
 
@@ -9,11 +8,11 @@ def build_dashboard():
     payload = json.loads((ROOT / 'data.json').read_text(encoding='utf-8'))
     products = payload['products']
     for product in products.values():
-        image = (ROOT / product['image_file']).resolve()
-        if not image.is_relative_to(ROOT / 'assets'):
-            raise ValueError('Image must be inside assets/')
-        mime = 'png' if image.suffix == '.png' else 'jpeg'
-        product['image'] = f'data:image/{mime};base64,' + base64.b64encode(image.read_bytes()).decode()
+        for field, target in [('thumbnail_file', 'image'), ('full_image_file', 'fullImage')]:
+            image = (ROOT / product[field]).resolve()
+            if not image.is_relative_to(ROOT / 'static') or not image.is_file():
+                raise ValueError('Image must exist inside static/')
+            product[target] = '/app/static/' + image.relative_to(ROOT / 'static').as_posix()
     for sku in payload['skus']:
         if sku['id'] not in products or not isinstance(sku['price'], (int, float)) or sku['price'] < 0:
             raise ValueError('Invalid SKU data')

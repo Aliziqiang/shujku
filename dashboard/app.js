@@ -5,20 +5,20 @@ function options(el,entries,selected){el.replaceChildren(...entries.map(([v,l])=
 function populate(){const b=$('brand').value;options($('brand'),[['','全部品牌'],...[...new Set([...data.map(d=>d.brand),...Object.values(productMetadata).map(d=>d.brand)])].map(b=>[b,b])],b);populateProducts();}
 function populateProducts(){const b=$('brand').value,p=$('product').value,items=[...data,...Object.entries(productMetadata).map(([id,d])=>({id,...d}))].filter(d=>!b||d.brand===b);const products=[...new Map(items.map(d=>[d.id,d])).values()];options($('product'),[['','全部商品'],...products.map(d=>[d.id,`排名${d.rank} · ${d.title||productMetadata[d.id]?.title||d.brand}`])],p);render();}
 function current(){return data.filter(d=>(!$('brand').value||d.brand===$('brand').value)&&(!$('product').value||d.id===$('product').value));}
-function safeImage(value){const s=String(value||'');return /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(s)||/^https:\/\//.test(s)?s:'';}
+function safeImage(value){const s=String(value||'');return /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(s)||/^https:\/\//.test(s)||/^\/app\/static\/(thumbs|full)\/[A-Za-z0-9_.-]+$/.test(s)?s:'';}
 
 function renderProductCards(rows){
  const groups=[...new Set(rows.map(d=>d.id))].map(id=>rows.filter(d=>d.id===id)).sort((a,b)=>a[0].rank-b[0].rank);
  $('skuRows').innerHTML=groups.map(items=>{
   const d=items[0],title=items.find(x=>x.title)?.title||productMetadata[d.id]?.title||'商品名称待补充',src=safeImage(items.find(x=>x.image)?.image||productMetadata[d.id]?.image),lo=Math.min(...items.map(x=>x.price)),hi=Math.max(...items.map(x=>x.price));
-  return `<details class="productCard"><summary><div class="productPhoto">${src?`<button type="button" class="imageZoom" aria-label="放大商品图片：${escape(title)}" title="点击放大图片"><img src="${escape(src)}" alt="${escape(title)}" loading="lazy"><span aria-hidden="true">放大</span></button>`:'<span>主图待补充</span>'}</div><div class="productCopy"><div class="productTags">排名 ${d.rank} · ${escape(d.brand)}</div><h3>${escape(title)}</h3><div class="productId">商品ID ${escape(d.id)} · ${items.length}个SKU</div></div><div class="productPrice"><small>售卖价格区间</small><strong>¥${fmt(lo)}–${fmt(hi)}</strong><span class="showDetails">展开SKU ⌄</span><span class="hideDetails">收起SKU ⌃</span></div></summary><div class="productSkus"><div class="chartKey"><span>SKU规格 · 按价格升序</span><span>售卖价 / 元</span></div>${productMetadata[d.id]?.note?`<p class="note">${escape(productMetadata[d.id].note)}</p>`:''}${items.map(x=>`<div class="skuRow"><div class="skuName">${escape(x.sku)}</div><div class="price">${fmt(x.price)}</div></div>`).join('')}${(productMetadata[d.id]?.unpricedSkus||[]).filter(sku=>!items.some(x=>x.sku===sku)).map(sku=>`<div class="skuRow"><div class="skuName">${escape(sku)}</div><div class="note">价格待补充</div></div>`).join('')}</div></details>`;
+  return `<details class="productCard"><summary><div class="productPhoto">${src?`<button type="button" class="imageZoom" aria-label="放大商品图片：${escape(title)}" title="点击放大图片"><img data-full-src="${escape(safeImage(d.fullImage||productMetadata[d.id]?.fullImage))}" src="${escape(src)}" alt="${escape(title)}" loading="lazy"><span aria-hidden="true">放大</span></button>`:'<span>主图待补充</span>'}</div><div class="productCopy"><div class="productTags">排名 ${d.rank} · ${escape(d.brand)}</div><h3>${escape(title)}</h3><div class="productId">商品ID ${escape(d.id)} · ${items.length}个SKU</div></div><div class="productPrice"><small>售卖价格区间</small><strong>¥${fmt(lo)}–${fmt(hi)}</strong><span class="showDetails">展开SKU ⌄</span><span class="hideDetails">收起SKU ⌃</span></div></summary><div class="productSkus"><div class="chartKey"><span>SKU规格 · 按价格升序</span><span>售卖价 / 元</span></div>${productMetadata[d.id]?.note?`<p class="note">${escape(productMetadata[d.id].note)}</p>`:''}${items.map(x=>`<div class="skuRow"><div class="skuName">${escape(x.sku)}</div><div class="price">${fmt(x.price)}</div></div>`).join('')}${(productMetadata[d.id]?.unpricedSkus||[]).filter(sku=>!items.some(x=>x.sku===sku)).map(sku=>`<div class="skuRow"><div class="skuName">${escape(sku)}</div><div class="note">价格待补充</div></div>`).join('')}</div></details>`;
  }).join('');
  appendPendingCards(rows);
  $('skuRows').querySelectorAll('img').forEach(img=>img.addEventListener('error',()=>{const text=document.createElement('span');text.textContent='图片暂不可用';img.replaceWith(text);},{once:true}));
 }
 function appendPendingCards(rows){
  const missing=Object.entries(productMetadata).filter(([id,d])=>d.pending&&!data.some(x=>x.id===id)&&(!$('brand').value||d.brand===$('brand').value)&&(!$('product').value||id===$('product').value));
- for(const [id,d] of missing){const el=document.createElement('article');el.className='productCard pendingCard';el.innerHTML=`<div class="pendingInner"><div class="productPhoto"><button type="button" class="imageZoom" aria-label="放大商品图片：${escape(d.title)}"><img src="${escape(safeImage(d.image))}" alt="${escape(d.title)}"><span aria-hidden="true">放大</span></button></div><div class="productCopy"><div class="productTags">排名 ${d.rank} · ${escape(d.brand)}</div><h3>${escape(d.title)}</h3><div class="productId">商品ID ${id}</div></div><div class="productPrice"><strong>待补充</strong><small>${escape(d.pending)}</small></div></div>`;el.dataset.rank=d.rank;$('skuRows').append(el);}
+ for(const [id,d] of missing){const el=document.createElement('article');el.className='productCard pendingCard';el.innerHTML=`<div class="pendingInner"><div class="productPhoto"><button type="button" class="imageZoom" aria-label="放大商品图片：${escape(d.title)}"><img data-full-src="${escape(safeImage(d.fullImage))}" loading="lazy" src="${escape(safeImage(d.image))}" alt="${escape(d.title)}"><span aria-hidden="true">放大</span></button></div><div class="productCopy"><div class="productTags">排名 ${d.rank} · ${escape(d.brand)}</div><h3>${escape(d.title)}</h3><div class="productId">商品ID ${id}</div></div><div class="productPrice"><strong>待补充</strong><small>${escape(d.pending)}</small></div></div>`;el.dataset.rank=d.rank;$('skuRows').append(el);}
  for(const card of $('skuRows').children){if(!card.dataset.rank)card.dataset.rank=card.querySelector('.productTags').textContent.match(/排名 (\d+)/)[1];}
  [...$('skuRows').children].sort((a,b)=>Number(a.dataset.rank)-Number(b.dataset.rank)).forEach(el=>$('skuRows').append(el));
 }
@@ -40,7 +40,9 @@ $('skuRows').addEventListener('click',event=>{
  const trigger=event.target.closest('.imageZoom');if(!trigger)return;
  event.preventDefault();event.stopPropagation();
  const img=trigger.querySelector('img');if(!img)return;
- $('zoomImage').src=img.currentSrc||img.src;$('zoomImage').alt=img.alt;
+ const preview=img.currentSrc||img.src;
+ $('zoomImage').onerror=()=>{$('zoomImage').onerror=null;$('zoomImage').src=preview;$('zoomCaption').textContent=img.alt+'（原图加载失败，暂显示缩略图）';};
+ $('zoomImage').src=safeImage(img.dataset.fullSrc)||preview;$('zoomImage').alt=img.alt;
  $('zoomCaption').textContent=img.alt;
  imageViewer.showModal();document.body.classList.add('imageViewing');
 });
@@ -50,4 +52,4 @@ imageViewer.addEventListener('click',event=>{
  const box=imageViewer.getBoundingClientRect();
  if(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom)imageViewer.close();
 });
-imageViewer.addEventListener('close',()=>{document.body.classList.remove('imageViewing');$('zoomImage').removeAttribute('src');});
+imageViewer.addEventListener('close',()=>{document.body.classList.remove('imageViewing');$('zoomImage').onerror=null;$('zoomImage').removeAttribute('src');});
